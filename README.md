@@ -5,10 +5,12 @@ This is a script that takes an HTML export of a Kindle notebook and converts it 
 Usage:
 
 ```sh
-kindle-markdown-notebook [file ...]
+kindle-markdown-notebook [--txt] [--no-rename] file ...
 ```
 
-Output files will be in the same location as the input file, with the extension changed to `.md`.
+Output files will be in the same location as the input file, with the extension changed to `.md`. Use the `--txt` flag to change the file extension to `.txt` instead.
+
+By default, the script will remove the `- Notebook` suffix as well as any characters other than letters, numbers, underscores, hyphens, and dots from the output filename. To keep the original filename with only the extension changed, add the `--no-rename` flag.
 
 ## Installation
 

@@ -16,12 +16,52 @@ import { cheerio } from "https://deno.land/x/cheerio@1.0.4/mod.ts";
  */
 
 /**
+ * @typedef Options
+ * @property {String} extension Output file extension
+ * @property {function} namingStrategy Generator for naming output files
+ * @property {Array<String>} includeEls Selectors containing highlight
+ *  information in the notebook
+ * @property {String} authorsEl Selector containing author names
+ * @property {String} titleEl Selector containing the book title
+ * @property {Array<RegExp>} skip Skip nodes where the text content matches
+ *  these regexes when parsing highlights
+ */
+
+/**
+ * Output file naming strategy that keep the original name and only replaces the
+ * extension.
+ *
+ * @param {String} path
+ * @param {String} extension
+ * @returns {String}
+ */
+function keepFilename(path, extension) {
+  return path.replace(/.html$/, extension);
+}
+
+/**
+ * Output file naming strategy that removes any characters other than letters,
+ * numbers, underscores, dashes and dots from the original name.
+ *
+ * @param {String} path
+ * @param {String} extension
+ * @returns {String}
+ */
+function prettyFilename(path, extension) {
+  const current = basename(path);
+  let next = current.replace(" - Notebook.html", extension);
+  next = next.replace(/[^\w\s-\.]+/g, "");
+
+  return path.replace(current, next);
+}
+
+/**
  * Convert a list of highlights, given as Cheerio nodes, to a plain object
  * array for easier processing.
  *
  * @param {CheerioAPI} $ document context
  * @param {Array<Node>} highlights highlights from the notebook
- * @param {Array<Highlight>} groups already processed groups
+ * @param {Array<Highlight>} group already processed groups
  * @returns {Array<Highlight>} processed groups
  */
 function parseHighlights($, highlights, groups = []) {
@@ -46,13 +86,15 @@ function parseHighlights($, highlights, groups = []) {
  * a generic JS data structure for further processing.
  *
  * @param {String} html
+ * @param {Options} options
  * @returns {Notebook}
  */
-function parseNotebook(html) {
+function parseNotebook(html, options) {
+  const { includeEls, authorsEl, titleEl, skip } = options;
   const $ = cheerio.load(html);
 
   // Authors
-  const authors = $(".authors")
+  const authors = $(authorsEl)
     .text()
     .split("; ")
     .map((author) => {
@@ -61,10 +103,22 @@ function parseNotebook(html) {
     });
 
   // Book title
-  const title = $(".bookTitle").text().trim();
+  const title = $(titleEl).text().trim();
 
   // Highlights
-  const highlights = parseHighlights($, $(".noteHeading,.noteText").toArray());
+  const selector = includeEls.join(",");
+  const els = $(selector)
+    .toArray()
+    .filter((el) => {
+      let skipped = false;
+
+      for (let i = 0; i < skip.length && !skipped; i++) {
+        skipped = !!$(el).text().trim().match(skip[0]);
+      }
+
+      return !skipped;
+    });
+  const highlights = parseHighlights($, els);
 
   return { title, authors, highlights };
 }
@@ -76,11 +130,13 @@ function parseNotebook(html) {
  * @returns {String}
  */
 function toMarkdown(notebook) {
-  return `# "${notebook.title}" by ${notebook.authors.join(" and ")}
+  return `# ${notebook.title}, by ${notebook.authors.join(" and ")}
 
-${notebook.highlights
-  .map(({ heading, text }) => `## ${heading}\n\n${text}`)
-  .join("\n\n")}
+${
+    notebook.highlights
+      .map(({ heading, text }) => `## ${heading}\n\n${text}`)
+      .join("\n\n")
+  }
 `;
 }
 
@@ -89,11 +145,14 @@ ${notebook.highlights
  * location as the source file.
  *
  * @param {String} path
+ * @param {Options} options
  */
-function process(path) {
+function process(path, options) {
+  const { extension, namingStrategy } = options;
   const filename = basename(path);
+  const out = namingStrategy(path, extension);
 
-  if (extname(path) !== "html") {
+  if (extname(path) !== ".html") {
     console.log(`🙁 "${filename}" is not a supported filetype`);
     return;
   }
@@ -107,17 +166,41 @@ function process(path) {
       }
     })
     .then((html) => {
-      const notes = parseNotebook(html);
+      const notes = parseNotebook(html, options);
       const md = toMarkdown(notes);
-
-      return Deno.writeTextFile(path.replace(/.html$/, ".md"), md);
+      return Deno.writeTextFile(out, md);
     })
     .then(() => {
-      console.log(`✅ ${filename}`);
+      console.log(`✅ ${basename(out)}`);
     })
     .catch((err) => {
       console.log(`🚨 ${filename}: ${err}`);
     });
 }
 
-Deno.args.forEach((path) => process(path));
+/** @type Options */
+const options = {
+  extension: ".md",
+  namingStrategy: prettyFilename,
+  includeEls: [".noteHeading", ".noteText"],
+  authorsEl: ".authors",
+  titleEl: ".bookTitle",
+  skip: [/^Bookmark.*$/],
+};
+
+const paths = [];
+
+Deno.args.forEach((arg) => {
+  switch (arg) {
+    case "--txt":
+      options.extension = ".txt";
+      break;
+    case "--no-rename":
+      options.namingStrategy = keepFilename;
+      break;
+    default:
+      paths.push(arg);
+  }
+});
+
+paths.forEach((path) => process(path, options));
