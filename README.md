@@ -19,14 +19,17 @@ You'll need [Deno](https://deno.land) installed to run the script.
 ```sh
 # Install Deno if you haven't already:
 brew install deno
+```
 
-# Download a copy:
-curl -OJ https://raw.githubusercontent.com/andreasphil/kindle-markdown-notebook/main/kindle-markdown-notebook.js
+### Option 1: Run directly (if you only need it once):
 
-# Option 1: Run directly (if you only need it once):
-deno run --allow-read --allow-write --unstable kindle-markdown-notebook.js path/to/notebook.html
+```sh
+deno run --allow-read --allow-write --unstable https://raw.githubusercontent.com/andreasphil/kindle-markdown-notebook/main/kindle-markdown-notebook.js path/to/notebook.html
+```
 
-# Option 2: Install permanently
-deno install --allow-read --allow-write --unstable kindle-markdown-notebook.js
+### Option 2: Install permanently
+
+```sh
+deno install --allow-read --allow-write --unstable https://raw.githubusercontent.com/andreasphil/kindle-markdown-notebook/main/kindle-markdown-notebook.js
 kindle-markdown-notebook path/to/notebook.html
 ```
